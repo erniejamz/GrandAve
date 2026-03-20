@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Grand Ave — Escondido | ANIMOMINDSET</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#080810;color:#fff;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;overflow:hidden}
+    canvas{display:block;width:100vw;height:100vh}
+    #loader{position:fixed;inset:0;background:#080810;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity .5s}
+    #loader h1{font-size:clamp(1.4rem,4vw,2.2rem);letter-spacing:.35em;color:#ffb3c6;margin-bottom:.4rem;font-weight:700}
+    #loader .sub{color:#888;letter-spacing:.18em;font-size:.78rem;margin-bottom:2rem;text-transform:uppercase}
+    #prog-wrap{width:260px;height:3px;background:#1a1a2e;border-radius:2px;overflow:hidden}
+    #prog{height:100%;background:linear-gradient(90deg,#ff8fa3,#ffd77a,#a0d8ef);width:0%;transition:width .25s}
+    #load-msg{margin-top:.9rem;color:#555;font-size:.72rem;letter-spacing:.08em}
+
+    #ui-top{position:fixed;top:20px;left:22px;z-index:50;pointer-events:none}
+    #ui-top h2{font-size:1.05rem;letter-spacing:.22em;color:#ffd77a;font-weight:700;text-shadow:0 0 20px rgba(255,215,122,.4)}
+    #ui-top p{font-size:.65rem;color:#666;letter-spacing:.14em;margin-top:3px}
+
+    #hint{position:fixed;top:20px;right:20px;z-index:50;font-size:.65rem;color:#444;letter-spacing:.07em;text-align:right;line-height:1.8;pointer-events:none}
+
+    #controls{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:8px;z-index:50;padding:0 12px}
+    .btn{background:rgba(8,8,18,.82);border:1px solid rgba(255,255,255,.12);color:#bbb;padding:9px 15px;border-radius:8px;cursor:pointer;font-size:.72rem;letter-spacing:.09em;backdrop-filter:blur(12px);transition:all .2s;user-select:none;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+    .btn:hover{border-color:rgba(255,143,163,.6);color:#fff;background:rgba(255,143,163,.12)}
+    .btn.on{border-color:#ff8fa3;color:#ff8fa3;background:rgba(255,143,163,.18)}
+
+    #mode-badge{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:50;font-size:.65rem;letter-spacing:.12em;color:#555;pointer-events:none;transition:color .4s}
+    #mode-badge.night{color:#a0d8ef}
+  </style>
+</head>
+<body>
+
+<div id="loader">
+  <h1>GRAND AVE</h1>
+  <div class="sub">Escondido, CA &nbsp;·&nbsp; Low Polyllismo</div>
+  <div id="prog-wrap"><div id="prog"></div></div>
+  <div id="load-msg">Loading scene…</div>
+</div>
+
+<canvas id="c"></canvas>
+
+<div id="ui-top">
+  <h2>GRAND AVE</h2>
+  <p>ESCONDIDO, CA &nbsp;·&nbsp; ANIMOMINDSET</p>
+</div>
+
+<div id="mode-badge" style="display:none"></div>
+
+<div id="hint">Drag to orbit &nbsp;·&nbsp; Scroll to zoom<br>Two fingers to pan</div>
+
+<div id="controls">
+  <button class="btn on"  id="bRot">⟳&nbsp;AUTO-ROTATE</button>
+  <button class="btn on"  id="bAnim">▶&nbsp;ANIMATION</button>
+  <button class="btn"     id="bIso">⊡&nbsp;ISO VIEW</button>
+  <button class="btn"     id="bNight">🌙&nbsp;NIGHT MODE</button>
+  <button class="btn"     id="bTop">⬆&nbsp;TOP VIEW</button>
+  <button class="btn"     id="bStreet">👁&nbsp;STREET VIEW</button>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader}    from 'three/addons/loaders/GLTFLoader.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+const canvas   = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping      = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, innerWidth/innerHeight, 0.1, 600);
+camera.position.set(32,24,28);
+
+const oc = new OrbitControls(camera, canvas);
+oc.target.set(0,3,0); oc.enableDamping=true; oc.dampingFactor=0.055;
+oc.autoRotate=true; oc.autoRotateSpeed=0.7;
+oc.minDistance=6; oc.maxDistance=140;
+oc.maxPolarAngle=Math.PI/2; oc.update();
+
+const ambient = new THREE.AmbientLight(0xffeedd, 0.7);
+const sun     = new THREE.DirectionalLight(0xfff5e0, 1.3);
+sun.position.set(18,28,18);
+const fill    = new THREE.DirectionalLight(0xd0e8ff, 0.35);
+fill.position.set(-12,10,-10);
+scene.add(ambient, sun, fill);
+
+let mixer=null, action=null, model=null, isAnim=true, isNight=false;
+const DAY   = 'grand_ave_phase4.glb';
+const NIGHT = 'grand_ave_phase5_night.glb';
+
+function setEnv(night) {
+  if(night){
+    scene.background = new THREE.Color(0x04040c);
+    scene.fog = new THREE.FogExp2(0x04040c, 0.0028);
+    ambient.intensity=0.18; ambient.color.set(0x7799bb);
+    sun.intensity=0; fill.intensity=0.18; fill.color.set(0x334488);
+  } else {
+    scene.background = new THREE.Color(0xc8e8f5);
+    scene.fog = new THREE.FogExp2(0xc8e8f5, 0.0025);
+    ambient.intensity=0.7; ambient.color.set(0xffeedd);
+    sun.intensity=1.3; sun.color.set(0xfff5e0);
+    fill.intensity=0.35; fill.color.set(0xd0e8ff);
+  }
+}
+
+const loader = new GLTFLoader();
+
+function loadScene(url, night) {
+  const prog    = document.getElementById('prog');
+  const msg     = document.getElementById('load-msg');
+  const loaderEl= document.getElementById('loader');
+  loaderEl.style.opacity='1'; loaderEl.style.display='flex';
+  prog.style.width='0%'; msg.textContent='Loading…';
+
+  loader.load(url, gltf => {
+    if(model){ scene.remove(model); model=null; }
+    if(mixer){ mixer.stopAllAction(); mixer=null; }
+    model = gltf.scene; scene.add(model);
+    if(gltf.animations?.length){
+      mixer  = new THREE.AnimationMixer(model);
+      action = mixer.clipAction(gltf.animations[0]);
+      if(isAnim) action.play();
+    }
+    setEnv(night);
+    loaderEl.style.opacity='0';
+    setTimeout(()=>loaderEl.style.display='none',500);
+    const badge=document.getElementById('mode-badge');
+    badge.textContent= night ? '🌙 NIGHT MODE' : '☀️ DAY MODE';
+    badge.className  = night ? 'night' : '';
+    badge.style.display='block';
+    setTimeout(()=>badge.style.display='none',1800);
+  }, p=>{
+    const pct=p.total>0 ? (p.loaded/p.total*100) : 50;
+    prog.style.width=pct+'%';
+    msg.textContent=`Loading… ${Math.round(pct)}%`;
+  }, err=>{
+    msg.textContent='⚠️ Place GLB files in same folder as this HTML file.';
+    console.error(err);
+  });
+}
+
+loadScene(DAY, false);
+
+// ── BUTTON LOGIC ─────────────────────────────────────────────────
+document.getElementById('bRot').addEventListener('click', function(){
+  oc.autoRotate=!oc.autoRotate;
+  this.classList.toggle('on',oc.autoRotate);
+  this.innerHTML=(oc.autoRotate?'⟳':'⏹')+'&nbsp;AUTO-ROTATE';
+});
+document.getElementById('bAnim').addEventListener('click', function(){
+  isAnim=!isAnim;
+  if(action){ isAnim ? action.play() : action.stop(); }
+  this.classList.toggle('on',isAnim);
+  this.innerHTML=(isAnim?'▶':'⏸')+'&nbsp;ANIMATION';
+});
+document.getElementById('bIso').addEventListener('click',()=>{
+  camera.position.set(32,24,28); oc.target.set(0,3,0); oc.update();
+});
+document.getElementById('bTop').addEventListener('click',()=>{
+  camera.position.set(0,55,0.01); oc.target.set(0,0,0); oc.update();
+});
+document.getElementById('bStreet').addEventListener('click',()=>{
+  camera.position.set(-18,2.5,1.5); oc.target.set(18,2.5,1.5); oc.update();
+});
+document.getElementById('bNight').addEventListener('click', function(){
+  isNight=!isNight;
+  this.innerHTML=(isNight?'☀️&nbsp;DAY MODE':'🌙&nbsp;NIGHT MODE');
+  this.classList.toggle('on',isNight);
+  loadScene(isNight?NIGHT:DAY, isNight);
+});
+
+// ── RENDER LOOP ───────────────────────────────────────────────────
+const clock=new THREE.Clock();
+(function loop(){
+  requestAnimationFrame(loop);
+  if(mixer) mixer.update(clock.getDelta());
+  oc.update();
+  renderer.render(scene,camera);
+})();
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
